@@ -1,5 +1,6 @@
 # ⚠ Don't use relative imports
 from yt_dlp.extractor.common import InfoExtractor
+from yt_dlp.utils.traversal import traverse_obj
 import re, json
 import os, base64
 import time
@@ -41,6 +42,7 @@ def num_list (inArr):
     return outStr
 
 def decode_rezka (inStr):
+    print ("???", inStr)
     if not inStr: return []
     bk= [
         "$$#!!@#!@##",
@@ -54,6 +56,7 @@ def decode_rezka (inStr):
     for bx in bk:
         tmpStr = tmpStr.replace(fs + base64.b64encode(bx.encode()).decode(),"")
     tmpStr = base64.b64decode(tmpStr).decode()
+    print ("***", tmpStr)
     return split_rezka(tmpStr)
 
 def parse_episodes (inStr):
@@ -78,6 +81,7 @@ def rezka_dict(info):
     }
     formats = []
     subtitles = {}
+    print ("$$$", info)
     for format_data in (decode_rezka(info.get("streams")) + decode_rezka(info.get("url"))):
         formats.append({
             "format":format_data.get("name"),
@@ -101,9 +105,9 @@ def rezka_dict(info):
 
 class RezkaIE(InfoExtractor):
     _WORKING = True
-    _VALID_URL = r'^https?://h?d?rezka\..*/(?P<id>\d+)-(?P<name>[^/]+)-(?P<year>\d+)\.html.*'
+    _VALID_URL = r'^https?://h?d?rezka[.-].*/(?P<id>\d+)-(?P<name>[^/]+)-(?P<year>\d+)\.html.*'
     _SCRIPT_REGEX = r'initCDN(Movies|Series)Events\(([^;]*})\);'
-    _DICT_HEADERS = ["id","translator_id", "camrip", "ads", "director", "domain", "unknown1", "info"]
+    _DICT_HEADERS = ["id","translator_id", "camrip", "ads", "director", "domain", "unknown1", "unknown2", "info"]
     _DOMAIN = ""
     
     def call_rezkaAPI (self, domain, data, action):
@@ -137,15 +141,19 @@ class RezkaIE(InfoExtractor):
             self.report_error("Cant find scriptData")
             return {}
         video_type = scriptData.group(1)
-        scriptData = dict(zip(self._DICT_HEADERS ,json.loads("["+scriptData.group(2).replace("'",'"')+"]")))
+        scriptTxt = "["+re.sub(r", '([^']*)',", r', "\1",', scriptData.group(2)) + "]"
+        with open("script.txt", "w") as f:
+          f.write (scriptTxt)
+        scriptData = dict(zip(self._DICT_HEADERS ,json.loads(scriptTxt)))
         self._DOMAIN = scriptData.get("domain", urllib.parse.urlparse(url).hostname)
+#        print (scriptData)
         if not translationList:
             return {**{
                 "_type":"video",
                 "id":video_id,
                 "title": video_title,
                 "alt_title": video_alttitle
-              }, **rezka_dict(scriptData)}
+              }, **rezka_dict(scriptData["info"])}
         else:
             trDict = {}
             for tr in translationList:
