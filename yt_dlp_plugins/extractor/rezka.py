@@ -56,7 +56,7 @@ def decode_rezka (inStr):
     for bx in bk:
         tmpStr = tmpStr.replace(fs + base64.b64encode(bx.encode()).decode(),"")
     tmpStr = base64.b64decode(tmpStr).decode()
-    print ("***", tmpStr)
+#    print ("***", tmpStr)
     return split_rezka(tmpStr)
 
 def parse_episodes (inStr):
@@ -81,7 +81,7 @@ def rezka_dict(info):
     }
     formats = []
     subtitles = {}
-    print ("$$$", info)
+#   print ("$$$", info)
     for format_data in (decode_rezka(info.get("streams")) + decode_rezka(info.get("url"))):
         formats.append({
             "format":format_data.get("name"),
@@ -142,8 +142,8 @@ class RezkaIE(InfoExtractor):
             return {}
         video_type = scriptData.group(1)
         scriptTxt = "["+re.sub(r", '([^']*)',", r', "\1",', scriptData.group(2)) + "]"
-        with open("script.txt", "w") as f:
-          f.write (scriptTxt)
+#        with open("script.txt", "w") as f:
+#          f.write (scriptTxt)
         scriptData = dict(zip(self._DICT_HEADERS ,json.loads(scriptTxt)))
         self._DOMAIN = scriptData.get("domain", urllib.parse.urlparse(url).hostname)
 #        print (scriptData)
