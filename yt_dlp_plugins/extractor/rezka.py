@@ -5,6 +5,7 @@ import re, json
 import os, base64
 import time
 import urllib.parse
+import datetime
 
 from yt_dlp.utils import (
     get_elements_by_attribute,
@@ -30,8 +31,8 @@ def split_rezka (inStr):
 def num_list (inArr):
     a = ([int(x) for x in set(inArr)])
     a.sort()
-    tmp = outStr = str(a[i])
     i = 1
+    tmp = outStr = str(a[i])
     while i < len (a):
         if a[i] != a[i-1]+1:
             if tmp != a[i-1]: outStr += f"-{a[i-1]}"
@@ -42,21 +43,25 @@ def num_list (inArr):
     return outStr
 
 def decode_rezka (inStr):
-    print ("???", inStr)
     if not inStr: return []
     bk= [
         "$$#!!@#!@##",
         "^^^!@##!!##",
         "####^!!##!@@",
         "@@@@@!##!^^^",
-        "$$!!@$$@^!@#$$@"
+        "$$!!@$$@^!@#$$@",
+        "####^!!##!@@"
     ]
     fs = "//_//"
     tmpStr = inStr[2:]
     for bx in bk:
         tmpStr = tmpStr.replace(fs + base64.b64encode(bx.encode()).decode(),"")
-    tmpStr = base64.b64decode(tmpStr).decode()
-#    print ("***", tmpStr)
+    try:
+      tmpStr = base64.b64decode(tmpStr).decode()
+    except:
+      with open (f'{datetime.datetime.now().timestamp()}.txt',"w") as f:
+        f.write (tmpStr)
+      raise()
     return split_rezka(tmpStr)
 
 def parse_episodes (inStr):
@@ -81,7 +86,6 @@ def rezka_dict(info):
     }
     formats = []
     subtitles = {}
-#   print ("$$$", info)
     for format_data in (decode_rezka(info.get("streams")) + decode_rezka(info.get("url"))):
         formats.append({
             "format":format_data.get("name"),
@@ -105,12 +109,15 @@ def rezka_dict(info):
 
 class RezkaIE(InfoExtractor):
     _WORKING = True
-    _VALID_URL = r'^https?://h?d?rezka[.-].*/(?P<id>\d+)-(?P<name>[^/]+)-(?P<year>\d+)\.html.*'
+    _VALID_URL = r'^https?://h?d?rezka[.-].*/(?P<id>\d+)-(?P<name>[^/]+)-(?P<year>\d+)(-latest)?\.html.*'
     _SCRIPT_REGEX = r'initCDN(Movies|Series)Events\(([^;]*})\);'
     _DICT_HEADERS = ["id","translator_id", "camrip", "ads", "director", "domain", "unknown1", "unknown2", "info"]
     _DOMAIN = ""
     
-    def call_rezkaAPI (self, domain, data, action):
+    def __init__(self, **kwargs):
+        self._kwargs = kwargs
+        
+    def call_rezkaAPI (self, domain="", data="", action=""):
         postdata = {x:int(data.get(x, 0)) for x in ["id", "translator_id"]}
         postdata.update ({"is_"+x:int(data.get(x, 0)) for x in ["camrip","ads","director"]})
         postdata.update({"action":action})
@@ -134,7 +141,7 @@ class RezkaIE(InfoExtractor):
         video_alttitle = " _ ".join(get_elements_by_attribute("class","b-post__origtitle", webpage, tag = "div"))
         video_alttitle = video_alttitle if video_alttitle else video_title
         
-        translationList = get_elements_html_by_attribute("class", "b-translator__item active", webpage, tag = "li") + get_elements_html_by_attribute("class", "b-translator__item", webpage, tag = "li")
+        translationList = get_elements_html_by_attribute("class", "b-translator__item active", webpage, tag = "li") + get_elements_html_by_attribute("class", "b-translator__item", webpage, tag = "li") + get_elements_html_by_attribute("class", "b-translator__item active", webpage, tag = "a") + get_elements_html_by_attribute("class", "b-translator__item", webpage, tag = "a")
         scriptRegex = re.compile (self._SCRIPT_REGEX)
         scriptData = scriptRegex.search(webpage)
         if not scriptData:
@@ -142,11 +149,8 @@ class RezkaIE(InfoExtractor):
             return {}
         video_type = scriptData.group(1)
         scriptTxt = "["+re.sub(r", '([^']*)',", r', "\1",', scriptData.group(2)) + "]"
-#        with open("script.txt", "w") as f:
-#          f.write (scriptTxt)
         scriptData = dict(zip(self._DICT_HEADERS ,json.loads(scriptTxt)))
-        self._DOMAIN = scriptData.get("domain", urllib.parse.urlparse(url).hostname)
-#        print (scriptData)
+        self._DOMAIN = str(scriptData.get("domain", urllib.parse.urlparse(url).hostname))
         if not translationList:
             return {**{
                 "_type":"video",
@@ -156,25 +160,27 @@ class RezkaIE(InfoExtractor):
               }, **rezka_dict(scriptData["info"])}
         else:
             trDict = {}
+            self._TRIDX = self._configuration_arg('translator', [None])[0]
             for tr in translationList:
                 trInfo = {key.replace("data-",""):val for key,val in extract_attributes(tr).items()}
-                if not "id" in trInfo: trInfo["id"]= video_id
-                trDict[trInfo["translator_id"]]=trInfo
-                if video_type == "Series":
-                        json_resp = self.call_rezkaAPI (
-                            domain = self._DOMAIN,
-                            data = trInfo,
-                            action = "get_episodes")
-                        trInfo["episodes"]= parse_episodes (json_resp["episodes"])
-                        trInfo["episodesStr"]=", ".join([f's{season}e[{num_list(episodes)}]' for season, episodes in trInfo["episodes"].items()])
-            while True:
+                if self._TRIDX==None or self._TRIDX==trInfo["translator_id"]:
+                  if not "id" in trInfo: trInfo["id"]= video_id
+                  trDict[trInfo["translator_id"]]=trInfo
+                  if video_type == "Series":
+                    json_resp = self.call_rezkaAPI (
+                                    domain = self._DOMAIN,
+                                    data = trInfo,
+                                    action = "get_episodes")
+                    trInfo["episodes"]= parse_episodes (json_resp["episodes"])
+                    trInfo["episodesStr"]=", ".join([f's{season}e[{num_list(episodes)}]' for season, episodes in trInfo["episodes"].items()])
+            while self._TRIDX==None:
                 self.report_warning("Select translation")
                 if video_type == "Series":
-                    print(render_table(["ID","\tName","\tEpisodes"], [[trId, trDict[trId].get("title"), trDict[trId].get("episodesStr") ] for trId in trDict]))
+                    print(render_table(["ID","Name","Episodes"], [[trId, trDict[trId].get("title"), trDict[trId].get("episodesStr") ] for trId in trDict]))
                 else:
-                    print(render_table(["ID","\tName"], [[trId, trDict[trId].get("title")] for trId in trDict]))
+                    print(render_table(["ID","Name"], [[trId, trDict[trId].get("title")] for trId in trDict]))
                 trIdx = input("Enter translator ID:")
-                if trIdx in trDict: break
+                if trIdx in trDict: self._TRIDX = trIdx
             if video_type == "Series":
                 out = {
                     "_type":"playlist",
@@ -183,11 +189,11 @@ class RezkaIE(InfoExtractor):
                     "alt_title": video_alttitle,
                     "entries":[]
                 }
-                for season, episodes in trDict[trIdx]["episodes"].items():
+                for season, episodes in trDict[self._TRIDX]["episodes"].items():
                     for episode in episodes:
                         json_resp = self.call_rezkaAPI (
                             domain = self._DOMAIN,
-                            data = {**trDict[trIdx], **{"season": season, "episode": episode}},
+                            data = {**trDict[self._TRIDX], **{"season": season, "episode": episode}},
                             action = "get_stream"
                         )
                         out["entries"].append({**{
@@ -199,9 +205,9 @@ class RezkaIE(InfoExtractor):
                         
                 return out
             else:
-                json_resp = call_rezkaAPI(
+                json_resp = self.call_rezkaAPI(
                     domain = self._DOMAIN,
-                    data = trDict[trIdx],
+                    data = trDict[self._TRIDX],
                     action = "get_movie"
                 )
                 return {**{
