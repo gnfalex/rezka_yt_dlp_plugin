@@ -167,12 +167,15 @@ class RezkaIE(InfoExtractor):
                   if not "id" in trInfo: trInfo["id"]= video_id
                   trDict[trInfo["translator_id"]]=trInfo
                   if video_type == "Series":
-                    json_resp = self.call_rezkaAPI (
+                    try:
+                      json_resp = self.call_rezkaAPI (
                                     domain = self._DOMAIN,
                                     data = trInfo,
                                     action = "get_episodes")
-                    trInfo["episodes"]= parse_episodes (json_resp["episodes"])
-                    trInfo["episodesStr"]=", ".join([f's{season}e[{num_list(episodes)}]' for season, episodes in trInfo["episodes"].items()])
+                      trInfo["episodes"]= parse_episodes (json_resp["episodes"])
+                      trInfo["episodesStr"]=", ".join([f's{season}e[{num_list(episodes)}]' for season, episodes in trInfo["episodes"].items()])
+                    except:
+                      pass
             while self._TRIDX==None:
                 self.report_warning("Select translation")
                 if video_type == "Series":
@@ -196,13 +199,17 @@ class RezkaIE(InfoExtractor):
                             data = {**trDict[self._TRIDX], **{"season": season, "episode": episode}},
                             action = "get_stream"
                         )
-                        out["entries"].append({**{
+                        try:
+                          out["entries"].append({**{
                             "_type":"video",
                             "id":video_id,
                             "title": f"s{int(season):02d}e{int(episode):02d} {video_title}",
                             "alt_title": video_alttitle
-                        }, **rezka_dict(json_resp)})
-
+                          }, **rezka_dict(json_resp),**{"season": season, "episode": episode}})
+                        except:
+                          pass
+                #with open("list.json", "w") as f:
+                #  json.dump(out, f, indent=2)
                 return out
             else:
                 json_resp = self.call_rezkaAPI(
