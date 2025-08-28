@@ -109,20 +109,20 @@ def rezka_dict(info):
 
 class RezkaIE(InfoExtractor):
     _WORKING = True
-    _VALID_URL = r'^https?://h?d?rezka[.-].*/(?P<id>\d+)-(?P<name>[^/]+)-(?P<year>\d+)(-latest)?\.html.*'
+    _VALID_URL = r'^https?://h?d?rezka(?:-ua)?\..*/(?P<id>\d+)-(?P<name>[^/]+)-(?P<year>\d+)(?P<other>-.*)?\.html.*'
     _SCRIPT_REGEX = r'initCDN(Movies|Series)Events\(([^;]*})\);'
     _DICT_HEADERS = ["id","translator_id", "camrip", "ads", "director", "domain", "unknown1", "unknown2", "info"]
     _DOMAIN = ""
-    
+
     def __init__(self, **kwargs):
         self._kwargs = kwargs
-        
+
     def call_rezkaAPI (self, domain="", data="", action=""):
         postdata = {x:int(data.get(x, 0)) for x in ["id", "translator_id"]}
         postdata.update ({"is_"+x:int(data.get(x, 0)) for x in ["camrip","ads","director"]})
         postdata.update({"action":action})
         url =  f'https://{domain}/ajax/get_cdn_series/?t={str(int(1000*(time.time())))}'
-        #url = 
+        #url =
         vid = f'{postdata.get("id", 0)}_{postdata.get("translator_id", 0)}'
         if "season" in data:
             postdata.update({x:data[x] for x in ["season", "episode"]})
@@ -140,7 +140,7 @@ class RezkaIE(InfoExtractor):
         video_title = " _ ".join([re.sub(r'\s*<[^>]*>\s*','',x) for x in get_elements_by_attribute("class","b-post__title", webpage, tag = "div")])
         video_alttitle = " _ ".join(get_elements_by_attribute("class","b-post__origtitle", webpage, tag = "div"))
         video_alttitle = video_alttitle if video_alttitle else video_title
-        
+
         translationList = get_elements_html_by_attribute("class", "b-translator__item active", webpage, tag = "li") + get_elements_html_by_attribute("class", "b-translator__item", webpage, tag = "li") + get_elements_html_by_attribute("class", "b-translator__item active", webpage, tag = "a") + get_elements_html_by_attribute("class", "b-translator__item", webpage, tag = "a")
         scriptRegex = re.compile (self._SCRIPT_REGEX)
         scriptData = scriptRegex.search(webpage)
@@ -202,7 +202,7 @@ class RezkaIE(InfoExtractor):
                             "title": f"s{int(season):02d}e{int(episode):02d} {video_title}",
                             "alt_title": video_alttitle
                         }, **rezka_dict(json_resp)})
-                        
+
                 return out
             else:
                 json_resp = self.call_rezkaAPI(
