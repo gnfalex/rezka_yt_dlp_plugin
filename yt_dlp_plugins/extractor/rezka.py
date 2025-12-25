@@ -75,7 +75,10 @@ def parse_episodes (inStr):
         result[s_id].append(e_id)
     return result
 
-def rezka_dict(info):
+def rezka_dict(info, urlp):
+    origin = urlp.scheme + "://" + urlp.hostname
+    referer = origin + "/"
+    
     result = {}
     _FORMATS = {
         "360p" : {"w":360, "h":240},
@@ -96,7 +99,11 @@ def rezka_dict(info):
             "container":format_data.get("ext"),
             "width":traverse_obj(_FORMATS, (format_data.get("name"),"w"), 0),
             "height":traverse_obj(_FORMATS,(format_data.get("name"),"h"), 0),
-            "preference": -2 if format_data.get("ext")=="m3u8" else -1
+            "preference": -2 if format_data.get("ext")=="m3u8" else -1,
+            "headers": {
+                "Origin": origin,
+                "Referer": referer
+            }
         })
     for sub_data in split_rezka(info.get("subtitle")):
         sub_code = traverse_obj(info, ("subtitle_lns", sub_data.get("name")), "zz")
@@ -150,14 +157,15 @@ class RezkaIE(InfoExtractor):
         video_type = scriptData.group(1)
         scriptTxt = "["+re.sub(r", '([^']*)',", r', "\1",', scriptData.group(2)) + "]"
         scriptData = dict(zip(self._DICT_HEADERS ,json.loads(scriptTxt)))
-        self._DOMAIN = str(scriptData.get("domain", urllib.parse.urlparse(url).hostname))
+        urlp = urllib.parse.urlparse(url)
+        self._DOMAIN = str(scriptData.get("domain", urlp.hostname))
         if not translationList:
             return {**{
                 "_type":"video",
                 "id":video_id,
                 "title": video_title,
                 "alt_title": video_alttitle
-              }, **rezka_dict(scriptData["info"])}
+              }, **rezka_dict(scriptData["info"], urlp)}
         else:
             trDict = {}
             self._TRIDX = self._configuration_arg('translator', [None])[0]
@@ -205,7 +213,7 @@ class RezkaIE(InfoExtractor):
                             "id":video_id,
                             "title": f"s{int(season):02d}e{int(episode):02d} {video_title}",
                             "alt_title": video_alttitle
-                          }, **rezka_dict(json_resp),**{"season": season, "episode": episode}})
+                          }, **rezka_dict(json_resp, urlp),**{"season": season, "episode": episode}})
                         except:
                           pass
                 #with open("list.json", "w") as f:
@@ -222,4 +230,4 @@ class RezkaIE(InfoExtractor):
                         "id":video_id,
                         "title": video_title,
                         "alt_title": video_alttitle
-                    }, **rezka_dict(json_resp)}
+                    }, **rezka_dict(json_resp, urlp)}
