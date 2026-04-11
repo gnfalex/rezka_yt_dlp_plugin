@@ -17,6 +17,8 @@ from yt_dlp.utils import (
 
 def split_rezka (inStr):
     if not inStr: return []
+    inStr = re.sub(r'<.*?prem-quality.*?">','PremuimStub-',inStr)
+    inStr = re.sub(r'<.*?>','',inStr)
     result = []
     for entry in inStr.split(","):
         idx = entry.index("]")
@@ -44,6 +46,7 @@ def num_list (inArr):
 
 def decode_rezka (inStr):
     if not inStr: return []
+    if "http" in inStr: return split_rezka(inStr)
     bk= [
         "$$#!!@#!@##",
         "^^^!@##!!##",
@@ -99,7 +102,7 @@ def rezka_dict(info, urlp):
             "container":format_data.get("ext"),
             "width":traverse_obj(_FORMATS, (format_data.get("name"),"w"), 0),
             "height":traverse_obj(_FORMATS,(format_data.get("name"),"h"), 0),
-            "preference": -2 if format_data.get("ext")=="m3u8" else -1,
+            "preference": -99 if "Premuim" in format_data.get("name") else -2 if format_data.get("ext")=="m3u8" else -1,
             "headers": {
                 "Origin": origin,
                 "Referer": referer
@@ -129,7 +132,6 @@ class RezkaIE(InfoExtractor):
         postdata.update ({"is_"+x:int(data.get(x, 0)) for x in ["camrip","ads","director"]})
         postdata.update({"action":action})
         url =  f'https://{domain}/ajax/get_cdn_series/?t={str(int(1000*(time.time())))}'
-        #url =
         vid = f'{postdata.get("id", 0)}_{postdata.get("translator_id", 0)}'
         if "season" in data:
             postdata.update({x:data[x] for x in ["season", "episode"]})
